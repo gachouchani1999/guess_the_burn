@@ -113,16 +113,19 @@ pub fn execute_announce(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Re
         Some(vec_winners) => vec_winners
     };
     // If no winners send back to community pool
-    let resp = Response::new().add_attribute("method", "announce");
+    let mut resp: Vec<CosmosMsg> = vec![];
+
     let winners_length : u64 = winners.len() as u64;
     let ratio_per_winner = 100/winners_length;
     for winner in winners {
-        resp.add_message(CosmosMsg::Bank(BankMsg::Send {
+        resp.push(CosmosMsg::Bank(BankMsg::Send {
             to_address: winner,
             amount: vec![Coin { denom: "ujunox".to_string() , amount: state.total_jackpot.multiply_ratio(ratio_per_winner, 100u128 ) }],
         }));
     }
-    Ok(resp)
+    Ok(Response::new()
+        .add_messages(resp)
+    )
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
