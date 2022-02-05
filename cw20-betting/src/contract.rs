@@ -4,8 +4,10 @@ use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response,
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ ExecuteMsg, InstantiateMsg, QueryMsg, TokenInfoResponse, TotalBetsResponse, JackpotResponse, BetPriceResponse, AddressBetResponse};
+use crate::msg::{ ExecuteMsg, InstantiateMsg, QueryMsg, TokenInfoResponse, TotalBetsResponse, JackpotResponse, BetPriceResponse, AddressBetResponse, CW20Query};
 use crate::state::{State, STATE, BETS, read_bet, save_bet, ADDRESS_BETS, read_address_bet, save_address_bet};
+use cw_utils::{Expiration, Scheduled};
+
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:cw20-betting";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -101,7 +103,7 @@ pub fn execute_announce(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Re
      let token_info = deps.querier
         .query::<TokenInfoResponse>(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: state.cw20_token_address,
-            msg: to_binary(&QueryMsg::TokenInfo {})?,
+            msg: to_binary(&CW20Query::TokenInfo {})?,
         }))?;
     
     let total_supply = token_info.total_supply;
@@ -112,12 +114,6 @@ pub fn execute_announce(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Re
     };
     // If no winners send back to community pool
     let resp = Response::new().add_attribute("method", "announce");
-    if winners.is_empty() {
-        resp.add_message(CosmosMsg::Bank(BankMsg::Send {
-            to_address: state.community_pool_address,
-            amount: vec![Coin { denom: "ujunox".to_string() , amount: state.total_jackpot }],
-        }));
-    }
     let winners_length : u64 = winners.len() as u64;
     let ratio_per_winner = 100/winners_length;
     for winner in winners {
@@ -136,6 +132,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Jackpot {} => to_binary(&query_jackpot(deps)?),
         QueryMsg::BetPrice {} => to_binary(&query_bet_price(deps, env)?),
         QueryMsg::AddressBet {address} => to_binary(&query_address_bet(deps, address)?),
+        
 
     }
 }
@@ -173,63 +170,20 @@ mod tests {
     fn proper_initialization() {
         let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
 
-        let msg = InstantiateMsg { count: 17 };
+        let msg = InstantiateMsg { 
+            cw20_token_address: "address_token".to_string(),
+            bet_start_block: Scheduled::AtHeight(10000),
+            bet_end_block: Expiration::AtHeight(20000),
+            burn_block: Expiration::AtHeight(30000),
+            community_pool_address: "community_address".to_string(),
+            bet_base_price: Uint128::from(100000u128)
+         };
         let info = mock_info("creator", &coins(1000, "earth"));
 
         // we can just call .unwrap() to assert this was a success
         let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
         assert_eq!(0, res.messages.len());
 
-        // it worked, let's query the state
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: CountResponse = from_binary(&res).unwrap();
-        assert_eq!(17, value.count);
     }
 
-    #[test]
-    fn increment() {
-        let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
-
-        let msg = InstantiateMsg { count: 17 };
-        let info = mock_info("creator", &coins(2, "token"));
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-        // beneficiary can release it
-        let info = mock_info("anyone", &coins(2, "token"));
-        let msg = ExecuteMsg::Increment {};
-        let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-        // should increase counter by 1
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: CountResponse = from_binary(&res).unwrap();
-        assert_eq!(18, value.count);
-    }
-
-    #[test]
-    fn reset() {
-        let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
-
-        let msg = InstantiateMsg { count: 17 };
-        let info = mock_info("creator", &coins(2, "token"));
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-        // beneficiary can release it
-        let unauth_info = mock_info("anyone", &coins(2, "token"));
-        let msg = ExecuteMsg::Reset { count: 5 };
-        let res = execute(deps.as_mut(), mock_env(), unauth_info, msg);
-        match res {
-            Err(ContractError::Unauthorized {}) => {}
-            _ => panic!("Must return unauthorized error"),
-        }
-
-        // only the original creator can reset the counter
-        let auth_info = mock_info("creator", &coins(2, "token"));
-        let msg = ExecuteMsg::Reset { count: 5 };
-        let _res = execute(deps.as_mut(), mock_env(), auth_info, msg).unwrap();
-
-        // should now be 5
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: CountResponse = from_binary(&res).unwrap();
-        assert_eq!(5, value.count);
-    }
 }

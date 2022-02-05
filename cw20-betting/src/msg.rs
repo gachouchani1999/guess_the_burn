@@ -29,9 +29,16 @@ pub enum QueryMsg {
     AddressBet {address: String}, 
     BetPrice {},
 
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CW20Query {
+
     // For CW20 contract
     TokenInfo {}
 }
+
 
 // We define a custom struct for each query response
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
