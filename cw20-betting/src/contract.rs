@@ -226,5 +226,31 @@ mod tests {
         let query_res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
         let jackpot: TotalBetsResponse = from_binary(&query_res).unwrap();
         assert_eq!(jackpot.total_bets, Uint128::from(1u64));
+
+        // another bettor 
+        let msg = ExecuteMsg::Bet {choosed_number: Uint128::from(120000000000u128)};
+        let info = mock_info("another_bettor", &coins(u128::from(price.bet_price), "ujunox"));
+        let _res = execute(deps.as_mut(), mock_env(), info, msg);
+
+        let query_msg = QueryMsg::TotalBets{};
+        let query_res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let jackpot: TotalBetsResponse = from_binary(&query_res).unwrap();
+        assert_eq!(jackpot.total_bets, Uint128::from(2u64));
+
+        let query_msg = QueryMsg::Jackpot {};
+        let query_res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let jackpot: JackpotResponse = from_binary(&query_res).unwrap();
+        assert_ne!(jackpot.jackpot, Uint128::from(0u64));
+
+        // same bettor
+        let msg = ExecuteMsg::Bet {choosed_number: Uint128::from(121000000000u128)};
+        let info = mock_info("another_bettor", &coins(u128::from(price.bet_price), "ujunox"));
+        let _res = execute(deps.as_mut(), mock_env(), info, msg);
+
+        // query their bets
+        let query_msg = QueryMsg::AddressBet{address: "another_bettor".to_string()};
+        let query_res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let address_bet: AddressBetResponse = from_binary(&query_res).unwrap();
+        assert_eq!(address_bet.bet, vec![Uint128::from(120000000000u128),Uint128::from(121000000000u128)]);
     }
 }
