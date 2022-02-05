@@ -186,7 +186,45 @@ mod tests {
         // we can just call .unwrap() to assert this was a success
         let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
         assert_eq!(0, res.messages.len());
-
     }
+    #[test]
+    fn query_bet_price_and_bet() {
+        let mut deps = mock_dependencies_with_balance(&[]);
 
+        let msg = InstantiateMsg { 
+            cw20_token_address: "address_token".to_string(),
+            bet_start_block: Scheduled::AtHeight(10000),
+            bet_end_block: Expiration::AtHeight(20000),
+            burn_block: Expiration::AtHeight(30000),
+            community_pool_address: "community_address".to_string(),
+            bet_base_price: Uint128::from(100000u128)
+         };
+        let info = mock_info("creator", &[]);
+
+        // we can just call .unwrap() to assert this was a success
+        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+        // query price
+        let query_msg = QueryMsg::BetPrice{};
+        let query_res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let price: BetPriceResponse = from_binary(&query_res).unwrap();
+        let msg = ExecuteMsg::Bet {choosed_number: Uint128::from(120000000000u128)};
+        let info = mock_info("bettor", &coins(u128::from(price.bet_price), "ujunox"));
+        let _res = execute(deps.as_mut(), mock_env(), info, msg);
+
+        // query user bets, total jackpot, total bets
+        let query_msg = QueryMsg::AddressBet{address: "bettor".to_string()};
+        let query_res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let address_bet: AddressBetResponse = from_binary(&query_res).unwrap();
+        assert_eq!(address_bet.bet, vec![Uint128::from(120000000000u128)]);
+
+        let query_msg = QueryMsg::Jackpot {};
+        let query_res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let jackpot: JackpotResponse = from_binary(&query_res).unwrap();
+        assert_ne!(jackpot.jackpot, Uint128::from(0u64));
+
+        let query_msg = QueryMsg::TotalBets{};
+        let query_res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let jackpot: TotalBetsResponse = from_binary(&query_res).unwrap();
+        assert_eq!(jackpot.total_bets, Uint128::from(1u64));
+    }
 }
